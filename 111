@@ -1,0 +1,407 @@
+-- StarterPlayerScripts/ChatUI.lua
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+-- 获取远程事件
+local SendMessage = ReplicatedStorage:WaitForChild("ChatRemoteEvents"):WaitForChild("SendMessage")
+local ReceiveMessage = ReplicatedStorage:WaitForChild("ChatRemoteEvents"):WaitForChild("ReceiveMessage")
+
+-- 创建聊天GUI
+local ChatGui = Instance.new("ScreenGui")
+ChatGui.Name = "ChatSystem"
+ChatGui.ResetOnSpawn = false
+ChatGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ChatGui.Parent = PlayerGui
+
+-- 主聊天框
+local ChatFrame = Instance.new("Frame")
+ChatFrame.Name = "ChatFrame"
+ChatFrame.Size = UDim2.new(0, 400, 0, 300)
+ChatFrame.Position = UDim2.new(0, 20, 1, -320)
+ChatFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+ChatFrame.BackgroundTransparency = 0.2
+ChatFrame.BorderSizePixel = 0
+ChatFrame.Parent = ChatGui
+
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 8)
+UICorner.Parent = ChatFrame
+
+-- 消息显示区域
+local MessagesScrollingFrame = Instance.new("ScrollingFrame")
+MessagesScrollingFrame.Name = "MessagesScrollingFrame"
+MessagesScrollingFrame.Size = UDim2.new(1, -10, 1, -50)
+MessagesScrollingFrame.Position = UDim2.new(0, 5, 0, 5)
+MessagesScrollingFrame.BackgroundTransparency = 1
+MessagesScrollingFrame.BorderSizePixel = 0
+MessagesScrollingFrame.ScrollBarThickness = 6
+MessagesScrollingFrame.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 120)
+MessagesScrollingFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+MessagesScrollingFrame.ScrollingDirection = Enum.ScrollingDirection.Y
+MessagesScrollingFrame.VerticalScrollBarInset = Enum.ScrollBarInset.Always
+MessagesScrollingFrame.Parent = ChatFrame
+
+local MessagesLayout = Instance.new("UIListLayout")
+MessagesLayout.Padding = UDim.new(0, 5)
+MessagesLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+MessagesLayout.SortOrder = Enum.SortOrder.LayoutOrder
+MessagesLayout.Parent = MessagesScrollingFrame
+
+-- 输入框
+local InputFrame = Instance.new("Frame")
+InputFrame.Name = "InputFrame"
+InputFrame.Size = UDim2.new(1, -10, 0, 40)
+InputFrame.Position = UDim2.new(0, 5, 1, -45)
+InputFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+InputFrame.BackgroundTransparency = 0.1
+InputFrame.BorderSizePixel = 0
+InputFrame.Parent = ChatFrame
+
+local InputCorner = Instance.new("UICorner")
+InputCorner.CornerRadius = UDim.new(0, 6)
+InputCorner.Parent = InputFrame
+
+local ChatInput = Instance.new("TextBox")
+ChatInput.Name = "ChatInput"
+ChatInput.Size = UDim2.new(1, -10, 1, -6)
+ChatInput.Position = UDim2.new(0, 5, 0, 3)
+ChatInput.BackgroundTransparency = 1
+ChatInput.Text = ""
+ChatInput.PlaceholderText = "输入消息... (按 Enter 发送)"
+ChatInput.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
+ChatInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+ChatInput.TextSize = 18
+ChatInput.TextXAlignment = Enum.TextXAlignment.Left
+ChatInput.ClearTextOnFocus = false
+ChatInput.Parent = InputFrame
+
+-- 发送按钮
+local SendButton = Instance.new("TextButton")
+SendButton.Name = "SendButton"
+SendButton.Size = UDim2.new(0, 60, 1, -6)
+SendButton.Position = UDim2.new(1, -65, 0, 3)
+SendButton.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
+SendButton.Text = "发送"
+SendButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+SendButton.TextSize = 16
+SendButton.Visible = false
+SendButton.Parent = InputFrame
+
+local ButtonCorner = Instance.new("UICorner")
+ButtonCorner.CornerRadius = UDim.new(0, 4)
+ButtonCorner.Parent = SendButton
+
+-- 聊天显示/隐藏按钮
+local ToggleButton = Instance.new("TextButton")
+ToggleButton.Name = "ToggleButton"
+ToggleButton.Size = UDim2.new(0, 100, 0, 40)
+ToggleButton.Position = UDim2.new(0, 20, 1, -50)
+ToggleButton.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
+ToggleButton.Text = "显示/隐藏聊天"
+ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+ToggleButton.TextSize = 14
+ToggleButton.Parent = ChatGui
+
+local ToggleCorner = Instance.new("UICorner")
+ToggleCorner.CornerRadius = UDim.new(0, 6)
+ToggleCorner.Parent = ToggleButton
+
+-- 消息模板
+local function createMessageTemplate()
+    local template = Instance.new("Frame")
+    template.Name = "MessageTemplate"
+    template.Size = UDim2.new(1, 0, 0, 0)  -- 高度自动
+    template.BackgroundTransparency = 1
+    template.AutomaticSize = Enum.AutomaticSize.Y
+    
+    local NameLabel = Instance.new("TextLabel")
+    NameLabel.Name = "SenderName"
+    NameLabel.Size = UDim2.new(0, 0, 0, 20)
+    NameLabel.Position = UDim2.new(0, 0, 0, 0)
+    NameLabel.BackgroundTransparency = 1
+    NameLabel.Text = "玩家名"
+    NameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    NameLabel.TextSize = 16
+    NameLabel.TextXAlignment = Enum.TextXAlignment.Left
+    NameLabel.Font = Enum.Font.SourceSansBold
+    NameLabel.AutomaticSize = Enum.AutomaticSize.X
+    NameLabel.Parent = template
+    
+    local MessageLabel = Instance.new("TextLabel")
+    MessageLabel.Name = "MessageText"
+    MessageLabel.Size = UDim2.new(1, 0, 0, 0)
+    MessageLabel.Position = UDim2.new(0, 0, 0, 20)
+    MessageLabel.BackgroundTransparency = 1
+    MessageLabel.Text = "消息内容"
+    MessageLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
+    MessageLabel.TextSize = 16
+    MessageLabel.TextXAlignment = Enum.TextXAlignment.Left
+    MessageLabel.TextWrapped = true
+    MessageLabel.AutomaticSize = Enum.AutomaticSize.Y
+    MessageLabel.Parent = template
+    
+    return template
+end
+
+-- 显示消息函数
+local function displayMessage(messageData)
+    local template = createMessageTemplate()
+    
+    -- 设置发送者名字和颜色
+    local senderLabel = template.SenderName
+    senderLabel.Text = messageData.Sender .. ":"
+    
+    if messageData.IsSystem then
+        senderLabel.Text = "[" .. messageData.Sender .. "]"
+    end
+    
+    if messageData.Color then
+        senderLabel.TextColor3 = messageData.Color
+    end
+    
+    -- 设置消息内容
+    local messageLabel = template.MessageText
+    messageLabel.Text = messageData.Message
+    
+    -- 可选：添加时间戳
+    if messageData.Timestamp then
+        local timeLabel = Instance.new("TextLabel")
+        timeLabel.Name = "TimeLabel"
+        timeLabel.Size = UDim2.new(0, 0, 0, 14)
+        timeLabel.Position = UDim2.new(1, -50, 0, 0)
+        timeLabel.BackgroundTransparency = 1
+        timeLabel.Text = os.date("%H:%M", messageData.Timestamp)
+        timeLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+        timeLabel.TextSize = 12
+        timeLabel.TextXAlignment = Enum.TextXAlignment.Right
+        timeLabel.AutomaticSize = Enum.AutomaticSize.X
+        timeLabel.Parent = template
+        
+        senderLabel.Size = UDim2.new(1, -60, 0, 20)
+    end
+    
+    -- 添加到消息列表
+    template.Parent = MessagesScrollingFrame
+    
+    -- 自动滚动到底部
+    task.wait()
+    MessagesScrollingFrame.CanvasPosition = Vector2.new(0, MessagesScrollingFrame.AbsoluteCanvasSize.Y)
+    
+    -- 可选：渐入动画
+    template.BackgroundTransparency = 1
+    senderLabel.TextTransparency = 1
+    messageLabel.TextTransparency = 1
+    
+    local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    local tween = TweenService:Create(template, tweenInfo, {BackgroundTransparency = 1})
+    tween:Play()
+    
+    local tween2 = TweenService:Create(senderLabel, tweenInfo, {TextTransparency = 0})
+    tween2:Play()
+    
+    local tween3 = TweenService:Create(messageLabel, tweenInfo, {TextTransparency = 0})
+    tween3:Play()
+end
+
+-- 发送消息函数
+local function sendMessage()
+    local message = string.gsub(ChatInput.Text, "^%s*(.-)%s*$", "%1")  -- 去除首尾空格
+    
+    if string.len(message) > 0 and string.len(message) <= 200 then
+        SendMessage:FireServer({
+            Message = message
+        })
+        ChatInput.Text = ""
+    elseif string.len(message) > 200 then
+        displayMessage({
+            Sender = "系统",
+            Message = "消息过长（最多200字符）",
+            Color = Color3.fromRGB(255, 100, 100),
+            IsSystem = true
+        })
+    end
+    
+    ChatInput:CaptureFocus()
+end
+
+-- 接收消息
+ReceiveMessage.OnClientEvent:Connect(function(messageData)
+    displayMessage(messageData)
+end)
+
+-- 输入处理
+ChatInput.Focused:Connect(function()
+    SendButton.Visible = true
+    ChatInput.PlaceholderText = ""
+end)
+
+ChatInput.FocusLost:Connect(function(enterPressed)
+    SendButton.Visible = false
+    
+    if enterPressed then
+        sendMessage()
+    else
+        ChatInput.PlaceholderText = "输入消息... (按 Enter 发送)"
+    end
+end)
+
+SendButton.MouseButton1Click:Connect(sendMessage)
+
+-- 聊天框显示/隐藏
+local chatVisible = true
+ToggleButton.MouseButton1Click:Connect(function()
+    chatVisible = not chatVisible
+    
+    local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    
+    if chatVisible then
+        -- 显示聊天框
+        local tween = TweenService:Create(ChatFrame, tweenInfo, {
+            Position = UDim2.new(0, 20, 1, -320)
+        })
+        tween:Play()
+        ToggleButton.Text = "隐藏聊天"
+    else
+        -- 隐藏聊天框
+        local tween = TweenService:Create(ChatFrame, tweenInfo, {
+            Position = UDim2.new(0, 20, 1, -20)
+        })
+        tween:Play()
+        ToggleButton.Text = "显示聊天"
+    end
+end)
+
+-- 键盘快捷键
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    
+    if input.KeyCode == Enum.KeyCode.Slash then
+        -- 按 / 键聚焦聊天输入
+        ChatInput:CaptureFocus()
+    elseif input.KeyCode == Enum.KeyCode.T then
+        -- 按 T 键聚焦聊天输入（备用快捷键）
+        ChatInput:CaptureFocus()
+    elseif input.KeyCode == Enum.KeyCode.Escape then
+        -- 按 ESC 键取消聊天输入
+        if ChatInput:IsFocused() then
+            ChatInput:ReleaseFocus()
+        end
+    end
+end)
+
+-- 初始化：显示欢迎消息
+displayMessage({
+    Sender = "系统",
+    Message = "聊天系统已就绪！按 T 或 / 键开始聊天。",
+    Color = Color3.fromRGB(0, 200, 255),
+    IsSystem = true
+})
+-- ServerScriptService/ChatSystem.lua
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
+
+-- 创建远程事件用于通信
+local RemoteEvents = Instance.new("Folder")
+RemoteEvents.Name = "ChatRemoteEvents"
+RemoteEvents.Parent = ReplicatedStorage
+
+local SendMessage = Instance.new("RemoteEvent")
+SendMessage.Name = "SendMessage"
+SendMessage.Parent = RemoteEvents
+
+local ReceiveMessage = Instance.new("RemoteEvent")
+ReceiveMessage.Name = "ReceiveMessage"
+ReceiveMessage.Parent = RemoteEvents
+
+-- 聊天历史记录（可选保存）
+local chatHistory = {}
+local MAX_HISTORY = 100
+
+-- 玩家加入时发送聊天历史
+local function onPlayerAdded(player)
+    -- 发送欢迎消息
+    local welcomeMsg = {
+        Sender = "系统",
+        Message = "欢迎 " .. player.Name .. " 加入游戏！",
+        Color = Color3.fromRGB(0, 255, 0),
+        Timestamp = os.time(),
+        IsSystem = true
+    }
+    
+    ReceiveMessage:FireClient(player, welcomeMsg)
+    
+    -- 发送最近的聊天历史
+    for _, msg in ipairs(chatHistory) do
+        ReceiveMessage:FireClient(player, msg)
+    end
+end
+
+-- 处理玩家发送的消息
+SendMessage.OnServerEvent:Connect(function(player, messageData)
+    -- 验证消息
+    if not player or not messageData then return end
+    if string.len(messageData.Message) > 200 then
+        messageData.Message = string.sub(messageData.Message, 1, 200) .. "..."
+    end
+    
+    -- 添加消息信息
+    messageData.Sender = player.Name
+    messageData.Color = Color3.fromRGB(255, 255, 255)  -- 默认白色
+    messageData.Timestamp = os.time()
+    messageData.IsSystem = false
+    
+    -- 保存到历史记录
+    table.insert(chatHistory, messageData)
+    if #chatHistory > MAX_HISTORY then
+        table.remove(chatHistory, 1)
+    end
+    
+    -- 广播给所有玩家
+    for _, otherPlayer in ipairs(Players:GetPlayers()) do
+        ReceiveMessage:FireClient(otherPlayer, messageData)
+    end
+    
+    -- 可选：在服务器控制台显示
+    print("[" .. os.date("%H:%M") .. "] " .. player.Name .. ": " .. messageData.Message)
+end)
+
+-- 系统广播消息函数
+local function broadcastSystemMessage(message, color)
+    local systemMsg = {
+        Sender = "系统",
+        Message = message,
+        Color = color or Color3.fromRGB(255, 100, 100),
+        Timestamp = os.time(),
+        IsSystem = true
+    }
+    
+    table.insert(chatHistory, systemMsg)
+    if #chatHistory > MAX_HISTORY then
+        table.remove(chatHistory, 1)
+    end
+    
+    for _, player in ipairs(Players:GetPlayers()) do
+        ReceiveMessage:FireClient(player, systemMsg)
+    end
+end
+
+-- 玩家离开时通知
+local function onPlayerRemoving(player)
+    broadcastSystemMessage(player.Name .. " 离开了游戏", Color3.fromRGB(255, 150, 150))
+end
+
+-- 初始化
+Players.PlayerAdded:Connect(onPlayerAdded)
+Players.PlayerRemoving:Connect(onPlayerRemoving)
+
+-- 公开系统消息函数
+return {
+    BroadcastSystemMessage = broadcastSystemMessage
+}
